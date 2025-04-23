@@ -445,7 +445,7 @@ export default function PongGame() {
               className="w-full py-6 text-lg bg-gray-600 cursor-not-allowed"
               title="Modo multiplayer não disponível em dispositivos móveis"
             >
-              Jogar com Outra Pessoa (Indisponível em Mobile)
+              (Indisponível em Mobile)
             </Button>
           )}
         </div>
