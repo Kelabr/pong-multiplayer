@@ -7,22 +7,43 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+type GameMode = "single" | "multi" | null
+
 export default function PongGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [player1Score, setPlayer1Score] = useState(0)
   const [player2Score, setPlayer2Score] = useState(0)
   const [gameStarted, setGameStarted] = useState(false)
   const [gameOver, setGameOver] = useState(false)
-  const [showNameForm, setShowNameForm] = useState(true)
+  const [showModeSelection, setShowModeSelection] = useState(true)
+  const [showNameForm, setShowNameForm] = useState(false)
+  const [gameMode, setGameMode] = useState<GameMode>(null)
   const [player1Name, setPlayer1Name] = useState("Jogador 1")
-  const [player2Name, setPlayer2Name] = useState("Jogador 2")
+  const [player2Name, setPlayer2Name] = useState("Computador")
   const [tempPlayer1Name, setTempPlayer1Name] = useState("Jogador 1")
   const [tempPlayer2Name, setTempPlayer2Name] = useState("Jogador 2")
+
+  const handleModeSelection = (mode: GameMode) => {
+    setGameMode(mode)
+    setShowModeSelection(false)
+    setShowNameForm(true)
+
+    if (mode === "single") {
+      setTempPlayer1Name("Jogador")
+      setTempPlayer2Name("Computador")
+    }
+  }
 
   const handleStartGame = (e: React.FormEvent) => {
     e.preventDefault()
     setPlayer1Name(tempPlayer1Name || "Jogador 1")
-    setPlayer2Name(tempPlayer2Name || "Jogador 2")
+
+    if (gameMode === "multi") {
+      setPlayer2Name(tempPlayer2Name || "Jogador 2")
+    } else {
+      setPlayer2Name("Computador")
+    }
+
     setShowNameForm(false)
   }
 
@@ -31,11 +52,13 @@ export default function PongGame() {
     setPlayer2Score(0)
     setGameOver(false)
     setGameStarted(false)
-    setShowNameForm(true)
+    setShowModeSelection(true)
+    setShowNameForm(false)
+    setGameMode(null)
   }
 
   useEffect(() => {
-    if (showNameForm) return
+    if (showModeSelection || showNameForm) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -74,6 +97,8 @@ export default function PongGame() {
       score: 0,
       dy: 0,
       speed: 8,
+      targetY: canvas.height / 2, // Initialize target position
+      predictionOffset: 0, // For ball trajectory prediction
     }
 
     // Ball
@@ -107,10 +132,17 @@ export default function PongGame() {
         e.preventDefault()
       }
 
-      if (e.key === "w" || e.key === "W") keys.w = true
-      if (e.key === "s" || e.key === "S") keys.s = true
-      if (e.key === "ArrowUp") keys.ArrowUp = true
-      if (e.key === "ArrowDown") keys.ArrowDown = true
+      // In single player mode, player uses arrow keys
+      if (gameMode === "single") {
+        if (e.key === "ArrowUp") keys.ArrowUp = true
+        if (e.key === "ArrowDown") keys.ArrowDown = true
+      } else {
+        // In multiplayer mode, player 1 uses W/S, player 2 uses arrows
+        if (e.key === "w" || e.key === "W") keys.w = true
+        if (e.key === "s" || e.key === "S") keys.s = true
+        if (e.key === "ArrowUp") keys.ArrowUp = true
+        if (e.key === "ArrowDown") keys.ArrowDown = true
+      }
 
       if (!gameStarted) {
         setGameStarted(true)
@@ -118,33 +150,124 @@ export default function PongGame() {
     }
 
     const keyUpHandler = (e: KeyboardEvent) => {
-      if (e.key === "w" || e.key === "W") keys.w = false
-      if (e.key === "s" || e.key === "S") keys.s = false
-      if (e.key === "ArrowUp") keys.ArrowUp = false
-      if (e.key === "ArrowDown") keys.ArrowDown = false
+      if (gameMode === "single") {
+        if (e.key === "ArrowUp") keys.ArrowUp = false
+        if (e.key === "ArrowDown") keys.ArrowDown = false
+      } else {
+        if (e.key === "w" || e.key === "W") keys.w = false
+        if (e.key === "s" || e.key === "S") keys.s = false
+        if (e.key === "ArrowUp") keys.ArrowUp = false
+        if (e.key === "ArrowDown") keys.ArrowDown = false
+      }
     }
 
     window.addEventListener("keydown", keyDownHandler)
     window.addEventListener("keyup", keyUpHandler)
 
-    // Update paddle positions based on key presses
-    const updatePaddles = () => {
-      // Player 1 (W and S)
-      if (keys.w) {
-        player1.dy = -player1.speed
-      } else if (keys.s) {
-        player1.dy = player1.speed
+    // Predict where the ball will be when it reaches the AI's x position
+    const predictBallPosition = () => {
+      // Only predict when ball is moving towards AI
+      if (ball.dx <= 0) return ball.y
+
+      // Calculate time until ball reaches AI's x position
+      const distanceX = player2.x - ball.x
+      const timeToReach = distanceX / ball.dx
+
+      // Predict y position
+      let predictedY = ball.y + ball.dy * timeToReach
+
+      // Account for bounces
+      const bounces = Math.floor(predictedY / canvas.height)
+      if (bounces % 2 === 0) {
+        predictedY = predictedY % canvas.height
       } else {
-        player1.dy = 0
+        predictedY = canvas.height - (predictedY % canvas.height)
       }
 
-      // Player 2 (Arrow keys)
-      if (keys.ArrowUp) {
-        player2.dy = -player2.speed
-      } else if (keys.ArrowDown) {
-        player2.dy = player2.speed
+      // Add some imperfection to the prediction
+      return predictedY + player2.predictionOffset
+    }
+
+    // Update paddle positions based on key presses
+    const updatePaddles = () => {
+      if (gameMode === "single") {
+        // In single player mode, player controls paddle with arrow keys
+        if (keys.ArrowUp) {
+          player1.dy = -player1.speed
+        } else if (keys.ArrowDown) {
+          player1.dy = player1.speed
+        } else {
+          player1.dy = 0
+        }
+
+        // AI controls the second paddle - more challenging but still beatable
+        const paddleCenter = player2.y + player2.height / 2
+
+        // Update prediction offset occasionally to simulate imperfect prediction
+        if (Math.random() < 0.02) {
+          player2.predictionOffset = Math.random() * 30 - 15 // Random offset between -15 and 15
+        }
+
+        // Predict ball position and set target
+        if (ball.dx > 0 || ball.x > canvas.width * 0.6) {
+          // Ball is moving towards AI or is in AI's half of the court
+          const predictedY = predictBallPosition()
+
+          // Update target position occasionally to maintain fluid movement
+          if (Math.random() < 0.05) {
+            player2.targetY = predictedY
+          }
+        } else {
+          // Ball is moving away, return to a neutral position with some randomness
+          if (Math.random() < 0.02) {
+            player2.targetY = canvas.height / 2 + (Math.random() * 60 - 30)
+          }
+        }
+
+        // Occasionally make mistakes (about 3% of the time)
+        const makesMistake = Math.random() < 0.03 && ball.x > canvas.width * 0.7
+
+        if (makesMistake) {
+          // Move in wrong direction, but smoothly
+          player2.dy = -Math.sign(player2.targetY - paddleCenter) * player2.speed * 0.6
+        } else {
+          // Smooth movement towards target
+          const distanceToTarget = player2.targetY - paddleCenter
+
+          if (Math.abs(distanceToTarget) > 5) {
+            // Proportional speed based on distance (creates acceleration/deceleration)
+            const speedFactor = Math.min(Math.abs(distanceToTarget) / 50, 1) * 0.8
+            player2.dy = Math.sign(distanceToTarget) * player2.speed * speedFactor
+          } else {
+            // Close enough to target, slow down
+            player2.dy = 0
+          }
+        }
+
+        // Limit AI movement to 85% of the court height (increased from 80%)
+        const aiLimitTop = canvas.height * 0.075
+        const aiLimitBottom = canvas.height * 0.925 - player2.height
+        if (player2.y < aiLimitTop) player2.y = aiLimitTop
+        if (player2.y > aiLimitBottom) player2.y = aiLimitBottom
       } else {
-        player2.dy = 0
+        // Multiplayer mode - both paddles controlled by players
+        // Player 1 (W and S)
+        if (keys.w) {
+          player1.dy = -player1.speed
+        } else if (keys.s) {
+          player1.dy = player1.speed
+        } else {
+          player1.dy = 0
+        }
+
+        // Player 2 (Arrow keys)
+        if (keys.ArrowUp) {
+          player2.dy = -player2.speed
+        } else if (keys.ArrowDown) {
+          player2.dy = player2.speed
+        } else {
+          player2.dy = 0
+        }
       }
 
       // Update positions
@@ -287,38 +410,64 @@ export default function PongGame() {
       window.removeEventListener("keyup", keyUpHandler)
       cancelAnimationFrame(animationId)
     }
-  }, [gameStarted, gameOver, showNameForm])
+  }, [gameStarted, gameOver, showNameForm, showModeSelection, gameMode])
+
+  if (showModeSelection) {
+    return (
+      <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
+        <h2 className="text-2xl font-bold text-white mb-6 text-center">Escolha o Modo de Jogo</h2>
+        <div className="space-y-4">
+          <Button
+            onClick={() => handleModeSelection("single")}
+            className="w-full py-6 text-lg bg-blue-600 hover:bg-blue-700"
+          >
+            Jogar Sozinho
+          </Button>
+          <Button
+            onClick={() => handleModeSelection("multi")}
+            className="w-full py-6 text-lg bg-green-600 hover:bg-green-700"
+          >
+            Jogar com Outra Pessoa
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   if (showNameForm) {
     return (
       <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
-        <h2 className="text-2xl font-bold text-white mb-6 text-center">Escolham seus nomes</h2>
+        <h2 className="text-2xl font-bold text-white mb-6 text-center">
+          {gameMode === "single" ? "Digite seu nome" : "Escolham seus nomes"}
+        </h2>
         <form onSubmit={handleStartGame} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="player1" className="text-white">
-              Jogador 1 (Teclas W/S)
+              {gameMode === "single" ? "Seu Nome" : "Jogador 1 (Teclas W/S)"}
             </Label>
             <Input
               id="player1"
               value={tempPlayer1Name}
               onChange={(e) => setTempPlayer1Name(e.target.value)}
               className="bg-gray-700 border-gray-600 text-white"
-              placeholder="Digite o nome do Jogador 1"
+              placeholder={gameMode === "single" ? "Digite seu nome" : "Digite o nome do Jogador 1"}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="player2" className="text-white">
-              Jogador 2 (Setas)
-            </Label>
-            <Input
-              id="player2"
-              value={tempPlayer2Name}
-              onChange={(e) => setTempPlayer2Name(e.target.value)}
-              className="bg-gray-700 border-gray-600 text-white"
-              placeholder="Digite o nome do Jogador 2"
-            />
-          </div>
+          {gameMode === "multi" && (
+            <div className="space-y-2">
+              <Label htmlFor="player2" className="text-white">
+                Jogador 2 (Setas)
+              </Label>
+              <Input
+                id="player2"
+                value={tempPlayer2Name}
+                onChange={(e) => setTempPlayer2Name(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+                placeholder="Digite o nome do Jogador 2"
+              />
+            </div>
+          )}
 
           <Button type="submit" className="w-full bg-green-600 hover:bg-green-700">
             Começar Jogo
@@ -346,7 +495,9 @@ export default function PongGame() {
         />
         {!gameStarted && !gameOver && (
           <div className="absolute inset-0 flex items-center justify-center text-white text-2xl font-bold">
-            Pressione qualquer tecla de controle para começar
+            {gameMode === "single"
+              ? "Pressione as setas para começar"
+              : "Pressione qualquer tecla de controle para começar"}
           </div>
         )}
         {gameOver && (
