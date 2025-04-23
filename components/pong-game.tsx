@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useMobile } from "@/hooks/use-mobile"
 
 type GameMode = "single" | "multi" | null
 
@@ -22,6 +23,8 @@ export default function PongGame() {
   const [player2Name, setPlayer2Name] = useState("Computador")
   const [tempPlayer1Name, setTempPlayer1Name] = useState("Jogador 1")
   const [tempPlayer2Name, setTempPlayer2Name] = useState("Jogador 2")
+
+  const isMobile = useMobile()
 
   const handleModeSelection = (mode: GameMode) => {
     setGameMode(mode)
@@ -66,13 +69,18 @@ export default function PongGame() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    // Set canvas dimensions
-    canvas.width = 800
-    canvas.height = 500
+    // Adjust canvas size for mobile
+    if (isMobile) {
+      canvas.width = Math.min(window.innerWidth - 40, 500)
+      canvas.height = canvas.width * 0.625 // Maintain aspect ratio
+    } else {
+      canvas.width = 800
+      canvas.height = 500
+    }
 
     // Game objects
     const paddleWidth = 15
-    const paddleHeight = 100
+    const paddleHeight = canvas.height / 5 // Adjust paddle height based on canvas size
     const ballSize = 15
     const colors = ["#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3", "#33FFF3"]
     let currentColorIndex = 0
@@ -86,7 +94,7 @@ export default function PongGame() {
       height: paddleHeight,
       score: 0,
       dy: 0,
-      speed: 8,
+      speed: canvas.height / 60, // Adjust speed based on canvas size
     }
 
     const player2 = {
@@ -96,7 +104,7 @@ export default function PongGame() {
       height: paddleHeight,
       score: 0,
       dy: 0,
-      speed: 8,
+      speed: canvas.height / 60,
       targetY: canvas.height / 2, // Initialize target position
       predictionOffset: 0, // For ball trajectory prediction
     }
@@ -106,9 +114,9 @@ export default function PongGame() {
       x: canvas.width / 2,
       y: canvas.height / 2,
       size: ballSize,
-      dx: 5,
-      dy: 5,
-      speed: 5,
+      dx: canvas.width / 160, // Adjust speed based on canvas size
+      dy: canvas.width / 160,
+      speed: canvas.width / 160,
     }
 
     // Key states
@@ -410,7 +418,7 @@ export default function PongGame() {
       window.removeEventListener("keyup", keyUpHandler)
       cancelAnimationFrame(animationId)
     }
-  }, [gameStarted, gameOver, showNameForm, showModeSelection, gameMode])
+  }, [gameStarted, gameOver, showNameForm, showModeSelection, gameMode, isMobile])
 
   if (showModeSelection) {
     return (
@@ -423,12 +431,23 @@ export default function PongGame() {
           >
             Jogar Sozinho
           </Button>
-          <Button
-            onClick={() => handleModeSelection("multi")}
-            className="w-full py-6 text-lg bg-green-600 hover:bg-green-700"
-          >
-            Jogar com Outra Pessoa
-          </Button>
+
+          {!isMobile ? (
+            <Button
+              onClick={() => handleModeSelection("multi")}
+              className="w-full py-6 text-lg bg-green-600 hover:bg-green-700"
+            >
+              Jogar com Outra Pessoa
+            </Button>
+          ) : (
+            <Button
+              disabled
+              className="w-full py-6 text-lg bg-gray-600 cursor-not-allowed"
+              title="Modo multiplayer não disponível em dispositivos móveis"
+            >
+              Jogar com Outra Pessoa (Indisponível em Mobile)
+            </Button>
+          )}
         </div>
       </div>
     )
@@ -480,10 +499,10 @@ export default function PongGame() {
   return (
     <div className="flex flex-col items-center">
       <div className="flex justify-between w-full max-w-[800px] mb-4">
-        <div className="text-2xl font-bold text-white">
+        <div className="text-xl md:text-2xl font-bold text-white">
           {player1Name}: {player1Score}
         </div>
-        <div className="text-2xl font-bold text-white">
+        <div className="text-xl md:text-2xl font-bold text-white">
           {player2Name}: {player2Score}
         </div>
       </div>
@@ -494,7 +513,7 @@ export default function PongGame() {
           style={{ maxWidth: "100%" }}
         />
         {!gameStarted && !gameOver && (
-          <div className="absolute inset-0 flex items-center justify-center text-white text-2xl font-bold">
+          <div className="absolute inset-0 flex items-center justify-center text-white text-xl md:text-2xl font-bold text-center px-4">
             {gameMode === "single"
               ? "Pressione as setas para começar"
               : "Pressione qualquer tecla de controle para começar"}
@@ -502,7 +521,7 @@ export default function PongGame() {
         )}
         {gameOver && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 rounded-lg">
-            <div className="text-3xl font-bold text-white mb-4">
+            <div className="text-2xl md:text-3xl font-bold text-white mb-4 text-center px-4">
               {player1Score >= 5 ? `${player1Name} Venceu!` : `${player2Name} Venceu!`}
             </div>
             <button
