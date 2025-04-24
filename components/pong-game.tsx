@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useMobile } from "@/hooks/use-mobile"
+import { MobileControls } from "./mobile-controls"
 
 type GameMode = "single" | "multi" | null
 
@@ -25,6 +26,15 @@ export default function PongGame() {
   const [tempPlayer2Name, setTempPlayer2Name] = useState("Jogador 2")
 
   const isMobile = useMobile()
+  const gameInitializedRef = useRef(false)
+
+  // Referência para as teclas pressionadas
+  const keysRef = useRef({
+    w: false,
+    s: false,
+    ArrowUp: false,
+    ArrowDown: false,
+  })
 
   const handleModeSelection = (mode: GameMode) => {
     setGameMode(mode)
@@ -48,6 +58,7 @@ export default function PongGame() {
     }
 
     setShowNameForm(false)
+    gameInitializedRef.current = false
   }
 
   const restartGame = () => {
@@ -58,6 +69,35 @@ export default function PongGame() {
     setShowModeSelection(true)
     setShowNameForm(false)
     setGameMode(null)
+    gameInitializedRef.current = false
+  }
+
+  // Funções para controles móveis que simulam as teclas de seta
+  const handleMobileUp = () => {
+    keysRef.current.ArrowUp = true
+    keysRef.current.ArrowDown = false
+
+    // Iniciar o jogo se ainda não estiver iniciado
+    if (!gameStarted && !gameInitializedRef.current) {
+      setGameStarted(true)
+      gameInitializedRef.current = true
+    }
+  }
+
+  const handleMobileDown = () => {
+    keysRef.current.ArrowUp = false
+    keysRef.current.ArrowDown = true
+
+    // Iniciar o jogo se ainda não estiver iniciado
+    if (!gameStarted && !gameInitializedRef.current) {
+      setGameStarted(true)
+      gameInitializedRef.current = true
+    }
+  }
+
+  const handleMobileStop = () => {
+    keysRef.current.ArrowUp = false
+    keysRef.current.ArrowDown = false
   }
 
   useEffect(() => {
@@ -119,14 +159,6 @@ export default function PongGame() {
       speed: canvas.width / 160,
     }
 
-    // Key states
-    const keys = {
-      w: false,
-      s: false,
-      ArrowUp: false,
-      ArrowDown: false,
-    }
-
     // Event listeners for key presses
     const keyDownHandler = (e: KeyboardEvent) => {
       if (
@@ -142,30 +174,32 @@ export default function PongGame() {
 
       // In single player mode, player uses arrow keys
       if (gameMode === "single") {
-        if (e.key === "ArrowUp") keys.ArrowUp = true
-        if (e.key === "ArrowDown") keys.ArrowDown = true
+        if (e.key === "ArrowUp") keysRef.current.ArrowUp = true
+        if (e.key === "ArrowDown") keysRef.current.ArrowDown = true
       } else {
         // In multiplayer mode, player 1 uses W/S, player 2 uses arrows
-        if (e.key === "w" || e.key === "W") keys.w = true
-        if (e.key === "s" || e.key === "S") keys.s = true
-        if (e.key === "ArrowUp") keys.ArrowUp = true
-        if (e.key === "ArrowDown") keys.ArrowDown = true
+        if (e.key === "w" || e.key === "W") keysRef.current.w = true
+        if (e.key === "s" || e.key === "S") keysRef.current.s = true
+        if (e.key === "ArrowUp") keysRef.current.ArrowUp = true
+        if (e.key === "ArrowDown") keysRef.current.ArrowDown = true
       }
 
-      if (!gameStarted) {
+      // Only start the game once to prevent restarting
+      if (!gameStarted && !gameInitializedRef.current) {
         setGameStarted(true)
+        gameInitializedRef.current = true
       }
     }
 
     const keyUpHandler = (e: KeyboardEvent) => {
       if (gameMode === "single") {
-        if (e.key === "ArrowUp") keys.ArrowUp = false
-        if (e.key === "ArrowDown") keys.ArrowDown = false
+        if (e.key === "ArrowUp") keysRef.current.ArrowUp = false
+        if (e.key === "ArrowDown") keysRef.current.ArrowDown = false
       } else {
-        if (e.key === "w" || e.key === "W") keys.w = false
-        if (e.key === "s" || e.key === "S") keys.s = false
-        if (e.key === "ArrowUp") keys.ArrowUp = false
-        if (e.key === "ArrowDown") keys.ArrowDown = false
+        if (e.key === "w" || e.key === "W") keysRef.current.w = false
+        if (e.key === "s" || e.key === "S") keysRef.current.s = false
+        if (e.key === "ArrowUp") keysRef.current.ArrowUp = false
+        if (e.key === "ArrowDown") keysRef.current.ArrowDown = false
       }
     }
 
@@ -200,9 +234,9 @@ export default function PongGame() {
     const updatePaddles = () => {
       if (gameMode === "single") {
         // In single player mode, player controls paddle with arrow keys
-        if (keys.ArrowUp) {
+        if (keysRef.current.ArrowUp) {
           player1.dy = -player1.speed
-        } else if (keys.ArrowDown) {
+        } else if (keysRef.current.ArrowDown) {
           player1.dy = player1.speed
         } else {
           player1.dy = 0
@@ -260,18 +294,18 @@ export default function PongGame() {
       } else {
         // Multiplayer mode - both paddles controlled by players
         // Player 1 (W and S)
-        if (keys.w) {
+        if (keysRef.current.w) {
           player1.dy = -player1.speed
-        } else if (keys.s) {
+        } else if (keysRef.current.s) {
           player1.dy = player1.speed
         } else {
           player1.dy = 0
         }
 
         // Player 2 (Arrow keys)
-        if (keys.ArrowUp) {
+        if (keysRef.current.ArrowUp) {
           player2.dy = -player2.speed
-        } else if (keys.ArrowDown) {
+        } else if (keysRef.current.ArrowDown) {
           player2.dy = player2.speed
         } else {
           player2.dy = 0
@@ -420,6 +454,21 @@ export default function PongGame() {
     }
   }, [gameStarted, gameOver, showNameForm, showModeSelection, gameMode, isMobile])
 
+  // Reset gameInitializedRef when game is over or restarted
+  useEffect(() => {
+    if (gameOver || showModeSelection || showNameForm) {
+      gameInitializedRef.current = false
+
+      // Também resetar as teclas
+      keysRef.current = {
+        w: false,
+        s: false,
+        ArrowUp: false,
+        ArrowDown: false,
+      }
+    }
+  }, [gameOver, showModeSelection, showNameForm])
+
   if (showModeSelection) {
     return (
       <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
@@ -440,12 +489,9 @@ export default function PongGame() {
               Jogar com Outra Pessoa
             </Button>
           ) : (
-            <Button
-              disabled
-              className="w-full py-6 text-lg bg-gray-600 cursor-not-allowed"
-              title="Modo multiplayer não disponível em dispositivos móveis"
-            >
-              (Indisponível em Mobile)
+            <Button disabled className="w-full py-6 text-lg bg-gray-600 cursor-not-allowed">
+              <span className="text-center">Multiplayer</span>
+              <span className="text-center text-xs block mt-1 opacity-70">Indisponível em Mobile</span>
             </Button>
           )}
         </div>
@@ -514,9 +560,11 @@ export default function PongGame() {
         />
         {!gameStarted && !gameOver && (
           <div className="absolute inset-0 flex items-center justify-center text-white text-xl md:text-2xl font-bold text-center px-4">
-            {gameMode === "single"
-              ? "Pressione as setas para começar"
-              : "Pressione qualquer tecla de controle para começar"}
+            {isMobile
+              ? "Toque nos controles para começar"
+              : gameMode === "single"
+                ? "Pressione as setas para começar"
+                : "Pressione qualquer tecla de controle para começar"}
           </div>
         )}
         {gameOver && (
@@ -533,6 +581,10 @@ export default function PongGame() {
           </div>
         )}
       </div>
+
+      {isMobile && gameMode === "single" && (
+        <MobileControls onMoveUp={handleMobileUp} onMoveDown={handleMobileDown} onStopMoving={handleMobileStop} />
+      )}
     </div>
   )
 }
